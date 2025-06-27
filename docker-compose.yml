@@ -1,0 +1,63 @@
+
+services:
+  # 1번: Redis Master + Sentinel
+  redis-master:
+    image: redis:latest
+    container_name: redis-master
+    command: 
+      - sh
+      - -c
+      - "redis-server --port 6379 --appendonly yes & redis-sentinel /sentinel.conf"
+    volumes:
+      - ./sentinel.conf:/sentinel.conf
+    networks:
+      - redis-net
+    ports:
+      - "6379:6379"    # Redis Master 포트
+      - "26379:26379"   # Sentinel 포트
+    restart: unless-stopped
+
+  # 2번: Redis Slave + Sentinel
+  redis-slave:
+    image: redis:latest
+    container_name: redis-slave
+    command: 
+      - sh
+      - -c
+      - "redis-server --port 6379 --replicaof redis-master 6379 --appendonly yes & redis-sentinel /sentinel.conf"
+    volumes:
+      - ./sentinel.conf:/sentinel.conf
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+    restart: unless-stopped
+
+  # 3번: Sentinel 전용
+  sentinel:
+    image: redis:latest
+    container_name: sentinel-standalone
+    command: redis-sentinel /sentinel.conf
+    volumes:
+      - ./sentinel.conf:/sentinel.conf
+    networks:
+      - redis-net
+    ports:
+      - "26380:26379"   # 전용 Sentinel 포트
+    depends_on:
+      - redis-master
+    restart: unless-stopped
+
+  # Redis Insight GUI
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redis-insight
+    ports:
+      - "5540:5540"
+    networks:
+      - redis-net
+    restart: unless-stopped
+
+networks:
+  redis-net:
+    driver: bridge
